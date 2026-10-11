@@ -46,11 +46,13 @@ The tail is a 32-sample ring at `$C8A0`. Length is `4 * min(|vx| + |vy|, 7) + 3`
 
 ## Build locally
 
-You need Zig 0.14 and `lwasm` from lwtools on `PATH`.
+You need Zig 0.14 and `lwasm` on `PATH`. Ubuntu 24.04 does not package lwtools, so build it:
 
 ```sh
-# Debian, Ubuntu, or GitHub-hosted Ubuntu
-sudo apt-get install lwtools
+curl -fsSL -o lwtools.tar.gz https://www.lwtools.ca/releases/lwtools/lwtools-4.25.tar.gz
+tar -xzf lwtools.tar.gz
+make -C lwtools-4.25
+sudo make -C lwtools-4.25 install
 
 zig build
 ```
@@ -82,7 +84,7 @@ Load a `.bin` in a Vectrex emulator (Vecx, or the Vectrex tab in MAME). The file
 - a pull request is opened or updated
 - you start it by hand with **Run workflow**
 
-The job is on `ubuntu-latest`. It downloads Zig 0.14.1 from ziglang.org, installs the `lwtools` package, runs `zig build`, and uploads `zig-out/bin/*.bin` plus the `.s` files as the `vectrex-roms` artifact.
+The job is on `ubuntu-latest`. It downloads Zig 0.14.1 from ziglang.org, builds lwtools 4.25 (Ubuntu does not package it), runs `zig build`, and uploads `zig-out/bin/*.bin` plus the `.s` files as the `vectrex-roms` artifact.
 
 To download a ROM:
 
