@@ -1,0 +1,327 @@
+const std = @import("std");
+
+const Wait_Recal = 0xF192;
+const Intensity_5F = 0xF2A5;
+const Intensity_a = 0xF2AB;
+const Reset0Ref = 0xF354;
+const Moveto_d = 0xF312;
+const Draw_Line_d = 0xF3DF;
+const Draw_VLc = 0xF3CE;
+const Print_Str_d = 0xF37A;
+const music1 = 0xFD0D;
+
+const grav_shift = 10;
+const drag_shift = 8;
+const start_x: i16 = 100 << 8;
+const start_vy: i16 = 2 << 8;
+const tail_samples = 32;
+const tail_buf = 0xC8A0;
+
+const Asm = struct {
+    buf: []u8,
+    len: usize = 0,
+
+    fn append(self: *Asm, text: []const u8) void {
+        @memcpy(self.buf[self.len..][0..text.len], text);
+        self.len += text.len;
+    }
+
+    fn line(self: *Asm, text: []const u8) void {
+        self.append(text);
+        self.append("\n");
+    }
+
+    fn fmt(self: *Asm, comptime spec: []const u8, args: anytype) void {
+        var tmp: [96]u8 = undefined;
+        const s = std.fmt.bufPrint(&tmp, spec, args) catch unreachable;
+        self.line(s);
+    }
+
+    fn label(self: *Asm, name: []const u8) void {
+        self.append(name);
+        self.append(":\n");
+    }
+
+    fn jsr(self: *Asm, addr: u16) void {
+        self.fmt(" jsr ${X:0>4}", .{addr});
+    }
+
+    fn ldx(self: *Asm, name: []const u8) void {
+        self.append(" ldx #");
+        self.append(name);
+        self.append("\n");
+    }
+
+    fn text(self: *Asm, name: []const u8, message: []const u8) void {
+        self.label(name);
+        self.append(" fcc \"");
+        self.append(message);
+        self.line("\"");
+        self.line(" fcb $80");
+    }
+
+    fn pairs(self: *Asm, name: []const u8, bytes: []const i8) void {
+        self.label(name);
+        var i: usize = 0;
+        while (i < bytes.len) : (i += 2) {
+            self.fmt(" fcb {d},{d}", .{ bytes[i], bytes[i + 1] });
+        }
+    }
+
+    fn asrD(self: *Asm, times: usize, loop: []const u8) void {
+        self.fmt(" ldy #{d}", .{times});
+        self.label(loop);
+        self.line(" asra");
+        self.line(" rorb");
+        self.line(" leay -1,y");
+        self.append(" bne ");
+        self.append(loop);
+        self.append("\n");
+    }
+
+    fn pull(self: *Asm, pos: u16, vel: u16, shift: usize, loop: []const u8) void {
+        self.fmt(" ldd ${X:0>4}", .{pos});
+        self.asrD(shift, loop);
+        self.line(" std $C88A");
+        self.fmt(" ldd ${X:0>4}", .{vel});
+        self.line(" subd $C88A");
+        self.fmt(" std ${X:0>4}", .{vel});
+    }
+};
+
+fn sat(v: f32) i8 {
+    const r = @round(v);
+    if (r > 127) return 127;
+    if (r < -128) return -128;
+    return @as(i8, @intFromFloat(r));
+}
+
+fn arc(comptime n: usize, r: f32, a0: f32, a1: f32) [n * 2]i8 {
+    var out: [n * 2]i8 = undefined;
+    var i: usize = 0;
+    while (i < n) : (i += 1) {
+        const t0 = a0 + (a1 - a0) * @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(n));
+        const t1 = a0 + (a1 - a0) * @as(f32, @floatFromInt(i + 1)) / @as(f32, @floatFromInt(n));
+        out[i * 2] = sat(r * @sin(t1) - r * @sin(t0));
+        out[i * 2 + 1] = sat(r * @cos(t1) - r * @cos(t0));
+    }
+    return out;
+}
+
+fn drawPart(a: *Asm, dy: i8, dx: i8, count: usize, name: []const u8) void {
+    a.jsr(Reset0Ref);
+    a.line(" lda $C882");
+    a.fmt(" adda #{d}", .{dy});
+    a.line(" ldb $C880");
+    a.fmt(" addb #{d}", .{dx});
+    a.jsr(Moveto_d);
+    a.fmt(" ldb #{d}", .{count});
+    a.ldx(name);
+    a.jsr(Draw_VLc);
+}
+
+fn game(a: *Asm) void {
+    const pi = std.math.pi;
+    const circle = arc(8, 14, -pi / 2.0, -pi / 2.0 + 2.0 * pi);
+    const smile = arc(5, 8, 200.0 * pi / 180.0, 340.0 * pi / 180.0);
+    const smile_y = sat(8 * @sin(200.0 * pi / 180.0));
+    const smile_x = sat(8 * @cos(200.0 * pi / 180.0));
+    const eye = [_]i8{ 3, 2, 0, -4, -3, 2 };
+
+    a.fmt("tailbuf equ ${X:0>4}", .{tail_buf});
+    a.fmt("; grav {d}, drag {d}, tail {d} samples", .{ grav_shift, drag_shift, tail_samples });
+    a.line(" org $0000");
+    a.line(" fcc \"g GCE 2026\"");
+    a.line(" fcb $80");
+    a.fmt(" fdb ${X:0>4}", .{music1});
+    a.line(" fcb $F8,$50,$20,$C8");
+    a.line(" fcc \"SMILE\"");
+    a.line(" fcb $80");
+    a.line(" fcb $00");
+
+    a.fmt(" ldd #{d}", .{start_x});
+    a.line(" std $C880");
+    a.line(" ldd #0");
+    a.line(" std $C882");
+    a.line(" std $C884");
+    a.fmt(" ldd #{d}", .{start_vy});
+    a.line(" std $C886");
+    a.line(" clr $C888");
+    a.line(" clr $C889");
+    a.line(" clr $C88F");
+
+    a.label("frame");
+    a.jsr(Wait_Recal);
+    a.line(" lda #6");
+    a.line(" sta $C82A");
+    a.line(" lda #4");
+    a.line(" sta $C82B");
+    a.line(" lda $C888");
+    a.line(" beq do_phys");
+    a.line(" ldd #0");
+    a.line(" std $C884");
+    a.line(" std $C886");
+    a.line(" lbra after_phys");
+
+    a.label("do_phys");
+    a.pull(0xC880, 0xC884, grav_shift, "gravx");
+    a.pull(0xC882, 0xC886, grav_shift, "gravy");
+    a.pull(0xC884, 0xC884, drag_shift, "dragx");
+    a.pull(0xC886, 0xC886, drag_shift, "dragy");
+    a.line(" ldd $C880");
+    a.line(" addd $C884");
+    a.line(" std $C880");
+    a.line(" ldd $C882");
+    a.line(" addd $C886");
+    a.line(" std $C882");
+    a.line(" lda $C880");
+    a.line(" bpl xabs");
+    a.line(" nega");
+    a.label("xabs");
+    a.line(" cmpa #32");
+    a.line(" lbhi after_phys");
+    a.line(" lda $C882");
+    a.line(" bpl yabs");
+    a.line(" nega");
+    a.label("yabs");
+    a.line(" cmpa #18");
+    a.line(" lbhi after_phys");
+    a.line(" inc $C888");
+
+    a.label("after_phys");
+    // Record the pixel the face is on. Newest sample ends the tail.
+    a.line(" lda $C889");
+    a.line(" lsla");
+    a.line(" ldx #tailbuf");
+    a.line(" leax a,x");
+    a.line(" lda $C882");
+    a.line(" sta ,x");
+    a.line(" lda $C880");
+    a.line(" sta 1,x");
+    a.line(" inc $C889");
+    a.line(" lda $C889");
+    a.line(" anda #$1F");
+    a.line(" sta $C889");
+    a.line(" lda $C88F");
+    a.line(" cmpa #32");
+    a.line(" bhs stored");
+    a.line(" inca");
+    a.line(" sta $C88F");
+    a.label("stored");
+
+    a.line(" lda $C888");
+    a.line(" lbne use_bye");
+    a.line(" ldu #hello");
+    a.line(" lbra print_msg");
+    a.label("use_bye");
+    a.line(" ldu #goodbye");
+    a.label("print_msg");
+    a.jsr(Intensity_5F);
+    a.line(" lda #4");
+    a.line(" ldb #-36");
+    a.jsr(Print_Str_d);
+
+    // length = clamp(|vx| + |vy|, 0..7) * 4 + 3, then clamp to samples stored.
+    a.line(" lda $C884");
+    a.line(" bpl vxpos");
+    a.line(" nega");
+    a.label("vxpos");
+    a.line(" sta $C89A");
+    a.line(" lda $C886");
+    a.line(" bpl vypos");
+    a.line(" nega");
+    a.label("vypos");
+    a.line(" adda $C89A");
+    a.line(" cmpa #7");
+    a.line(" bls spd_ok");
+    a.line(" lda #7");
+    a.label("spd_ok");
+    a.line(" lsla");
+    a.line(" lsla");
+    a.line(" adda #3");
+    a.line(" cmpa $C88F");
+    a.line(" bls len_ok");
+    a.line(" lda $C88F");
+    a.label("len_ok");
+    a.line(" sta $C88E");
+    a.line(" cmpa #2");
+    a.line(" lblo no_tail");
+
+    a.line(" lda $C889");
+    a.line(" suba $C88E");
+    a.line(" anda #$1F");
+    a.line(" sta $C88C");
+    a.jsr(Reset0Ref);
+    a.line(" jsr load_slot");
+    a.line(" sta $C894");
+    a.line(" stb $C895");
+    a.jsr(Moveto_d);
+    a.line(" lda #$08");
+    a.line(" sta $C88D");
+    a.line(" lda $C88E");
+    a.line(" deca");
+    a.line(" sta $C896");
+
+    a.label("seg");
+    a.line(" lda $C88C");
+    a.line(" inca");
+    a.line(" anda #$1F");
+    a.line(" sta $C88C");
+    a.line(" jsr load_slot");
+    a.line(" sta $C897");
+    a.line(" stb $C898");
+    a.line(" lda $C897");
+    a.line(" suba $C894");
+    a.line(" sta $C89A");
+    a.line(" lda $C898");
+    a.line(" suba $C895");
+    a.line(" sta $C89B");
+    a.line(" lda $C88D");
+    a.jsr(Intensity_a);
+    a.line(" lda $C89A");
+    a.line(" ldb $C89B");
+    a.jsr(Draw_Line_d);
+    a.line(" lda $C897");
+    a.line(" sta $C894");
+    a.line(" lda $C898");
+    a.line(" sta $C895");
+    a.line(" lda $C88D");
+    a.line(" adda #6");
+    a.line(" cmpa #$5F");
+    a.line(" bls bright");
+    a.line(" lda #$5F");
+    a.label("bright");
+    a.line(" sta $C88D");
+    a.line(" dec $C896");
+    a.line(" lbne seg");
+
+    a.label("no_tail");
+    a.jsr(Intensity_5F);
+    drawPart(a, sat(14 * @sin(-pi / 2.0)), 0, 8, "circle");
+    drawPart(a, 6, -6, 3, "eye");
+    drawPart(a, 6, 6, 3, "eye");
+    drawPart(a, smile_y, smile_x, 5, "smile");
+    a.line(" lbra frame");
+
+    a.label("load_slot");
+    a.line(" lda $C88C");
+    a.line(" lsla");
+    a.line(" ldx #tailbuf");
+    a.line(" leax a,x");
+    a.line(" lda ,x");
+    a.line(" ldb 1,x");
+    a.line(" rts");
+
+    a.text("hello", "HELLO WORLD");
+    a.text("goodbye", "GOODBYE WORLD");
+    a.pairs("circle", &circle);
+    a.pairs("eye", &eye);
+    a.pairs("smile", &smile);
+}
+
+pub fn main() !void {
+    var storage: [16384]u8 = undefined;
+    var a = Asm{ .buf = &storage };
+    game(&a);
+    try std.posix.write(std.posix.STDOUT_FILENO, a.buf[0..a.len]);
+}
