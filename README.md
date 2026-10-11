@@ -66,7 +66,85 @@ Outputs:
 | `zig-out/smile.s` | assembly for the smile cartridge |
 | `zig-out/bin/smile.bin` | smile ROM |
 
-Load a `.bin` in a Vectrex emulator (Vecx, or the Vectrex tab in MAME). The file is a raw cartridge image, not an ELF.
+Load a `.bin` in a Vectrex emulator. The file is a raw cartridge image, not an ELF. On a Mac, `zig build` opens it for you. See below.
+
+## Mac
+
+A local `zig build` on macOS builds every ROM, then opens `smile.bin` in RetroArch and waits. Quit RetroArch and the build command returns. GitHub Actions is Linux and does not launch anything.
+
+### Requirements
+
+| Tool | Why | How |
+|---|---|---|
+| Xcode Command Line Tools | `make` and `clang`, used to build `lwasm` | `xcode-select --install` |
+| Zig **0.14.1** | Host compiler. 0.15 and later will not build this tree (`std.posix`) | Tarball below. `brew install zig` is often newer than 0.14. |
+| lwtools 4.25 | Provides `lwasm` | Source build below. There is no Homebrew bottle. |
+| RetroArch | Vectrex window | [retroarch.com](https://retroarch.com/) macOS build. Copy `RetroArch.app` to `/Applications`. Open it once and allow it if Gatekeeper asks. |
+| vecx core | Emulator. No Vectrex BIOS file is required. | In RetroArch: **Online Updater → Core Downloader → Vectrex (vecx)**. The file must land at `~/Library/Application Support/RetroArch/cores/vecx_libretro.dylib`. |
+
+Zig 0.14.1 for a Mac:
+
+```sh
+# Apple silicon
+curl -fsSL -o zig.tar.xz https://ziglang.org/download/0.14.1/zig-aarch64-macos-0.14.1.tar.xz
+# Intel
+curl -fsSL -o zig.tar.xz https://ziglang.org/download/0.14.1/zig-x86_64-macos-0.14.1.tar.xz
+
+tar -xJf zig.tar.xz
+# Then put that directory on your PATH, or call ./zig-aarch64-macos-0.14.1/zig
+```
+
+`lwasm`:
+
+```sh
+curl -fsSL -o lwtools.tar.gz https://www.lwtools.ca/releases/lwtools/lwtools-4.25.tar.gz
+tar -xzf lwtools.tar.gz
+make -C lwtools-4.25
+sudo make -C lwtools-4.25 install
+```
+
+### Each local build
+
+From the repository root, after the requirements above are done:
+
+```sh
+zig build
+```
+
+That writes both cartridges and runs:
+
+```text
+/Applications/RetroArch.app/Contents/MacOS/RetroArch \
+  -L "$HOME/Library/Application Support/RetroArch/cores/vecx_libretro.dylib" \
+  zig-out/bin/smile.bin
+```
+
+The window is the Vectrex screen. The smile demo plays itself: an ellipse, a tail that grows when the face is fast, then `GOODBYE WORLD`. Close the window to finish `zig build`.
+
+```sh
+zig build -Drom=hello          # open the static HELLO WORLD cartridge instead
+zig build -Dlaunch=false       # write the bins and return immediately
+zig build -Dlaunch=true        # same as the default on a Mac; ignored on Linux and CI
+```
+
+If RetroArch or the vecx core is missing, the ROMs are still written and the build exits with the install steps. Fix that once. The next `zig build` loads the ROM again.
+
+You can also load a bin by hand. RetroArch → **Load Content** → `zig-out/bin/smile.bin`, with the vecx core. Or repeat the command above.
+
+## Build on Linux
+
+You need Zig 0.14 and `lwasm` on `PATH`. Ubuntu 24.04 does not package lwtools, so build it:
+
+```sh
+curl -fsSL -o lwtools.tar.gz https://www.lwtools.ca/releases/lwtools/lwtools-4.25.tar.gz
+tar -xzf lwtools.tar.gz
+make -C lwtools-4.25
+sudo make -C lwtools-4.25 install
+
+zig build
+```
+
+A Linux build does not open an emulator unless you pass `-Dlaunch=true` and provide `tools/launch-mac.sh`'s requirements, which are Mac-only. Use the bins with any vecx or MAME Vectrex driver. MAME's `vectrex` driver also needs a BIOS dump you own (`vectrex.zip`). vecx in RetroArch does not.
 
 ## Add an example
 
