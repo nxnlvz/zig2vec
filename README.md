@@ -15,7 +15,7 @@ build.zig               one ROM step per example
 `src/` does not know about a particular game. An example imports it as `zig2vec` and fills an `Asm` buffer. `build.zig` compiles that example, captures stdout, and runs:
 
 ```text
-lwasm --format=raw --output <name>.bin <name>.s
+lwasm --format=raw -o <name>.bin <name>.s
 ```
 
 ## Library

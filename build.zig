@@ -34,7 +34,7 @@ fn addRom(b: *std.Build, exe: *std.Build.Step.Compile, name: []const u8) void {
     const run = b.addRunArtifact(exe);
     const asm_file = run.captureStdOut();
 
-    const lwasm = b.addSystemCommand(&.{ "lwasm", "--format=raw", "--output" });
+    const lwasm = b.addSystemCommand(&.{ "lwasm", "--format=raw", "-o" });
     const bin = lwasm.addOutputFileArg(b.fmt("{s}.bin", .{name}));
     lwasm.addFileArg(asm_file);
 
