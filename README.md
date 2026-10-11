@@ -144,7 +144,7 @@ sudo make -C lwtools-4.25 install
 zig build
 ```
 
-A Linux build does not open an emulator unless you pass `-Dlaunch=true` and provide `tools/launch-mac.sh`'s requirements, which are Mac-only. Use the bins with any vecx or MAME Vectrex driver. MAME's `vectrex` driver also needs a BIOS dump you own (`vectrex.zip`). vecx in RetroArch does not.
+A Linux or CI build never opens an emulator. `tools/launch-mac.sh` returns immediately unless it is running on macOS. Use the bins with any vecx or MAME Vectrex driver. MAME's `vectrex` driver also needs a BIOS dump you own (`vectrex.zip`). vecx in RetroArch does not.
 
 ## Add an example
 
