@@ -164,10 +164,48 @@ A Linux or CI build never opens an emulator. `tools/launch-mac.sh` returns immed
 
 The job is on `ubuntu-latest`. It downloads Zig 0.14.1 from ziglang.org, builds lwtools 4.25 (Ubuntu does not package it), runs `zig build`, and uploads `zig-out/bin/*.bin` plus the `.s` files as the `vectrex-roms` artifact.
 
-To download a ROM:
+You do not need Zig or `lwasm` to play a cartridge. Every green **Build ROMs** run uploads a `vectrex-roms` zip. Inside it:
 
-1. Open the repository on GitHub and choose the **Actions** tab.
-2. Choose **Build ROMs**. A push to `main` starts a run on its own. Otherwise choose **Run workflow**.
-3. Open the finished run. The green job has an **Artifacts** section. Download `vectrex-roms`. The zip contains `hello.bin` and `smile.bin`.
+```text
+bin/hello.bin    static HELLO WORLD cartridge
+bin/smile.bin    orbiting smiley
+hello.s          generated assembly
+smile.s
+```
 
-If the Actions tab says workflows are disabled, go to **Settings → Actions → General** and allow actions. A repository owned by a user account usually runs them as soon as the workflow file is on `main`. The first run is the commit that added this file.
+### In the browser
+
+1. Open [Actions](https://github.com/nxnlvz/zig2vec/actions) and choose **Build ROMs**.
+2. Open the newest run whose icon is green. A push to `main` starts one on its own. Otherwise use **Run workflow**.
+3. Scroll to **Artifacts** and download `vectrex-roms`.
+4. Unzip it. On a Mac, double-click the zip in Downloads.
+
+### From the command line
+
+[GitHub CLI](https://cli.github.com/), logged in so it can read the repository:
+
+```sh
+gh run download -R nxnlvz/zig2vec -n vectrex-roms -D ~/vectrex-roms
+```
+
+That writes `~/vectrex-roms/bin/smile.bin` and `~/vectrex-roms/bin/hello.bin`.
+
+### Load it on a Mac
+
+RetroArch and the vecx core are the same requirements as a local build. No Vectrex BIOS file.
+
+1. If you have not already: install [RetroArch](https://retroarch.com/), copy `RetroArch.app` to `/Applications`, open it once, and allow it if Gatekeeper asks.
+2. In RetroArch: **Online Updater → Core Downloader → Vectrex (vecx)**.
+3. Either load the file from the menu, or start it from Terminal:
+
+```sh
+/Applications/RetroArch.app/Contents/MacOS/RetroArch \
+  -L "$HOME/Library/Application Support/RetroArch/cores/vecx_libretro.dylib" \
+  "$HOME/vectrex-roms/bin/smile.bin"
+```
+
+Use `bin/hello.bin` for the static screen. **Load Content** in the RetroArch menu is the same thing: pick the `.bin`, and if asked for a core pick **Vectrex (vecx)**.
+
+The smile cartridge plays itself. Close the window when you are done. Nothing here is installed into RetroArch; the next download replaces the zip, and you point the emulator at the new `bin/smile.bin`.
+
+If the Actions tab says workflows are disabled, go to **Settings → Actions → General** and allow actions.
