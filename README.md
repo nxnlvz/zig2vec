@@ -208,4 +208,21 @@ Use `bin/hello.bin` for the static screen. **Load Content** in the RetroArch men
 
 The smile cartridge plays itself. Close the window when you are done. Nothing here is installed into RetroArch; the next download replaces the zip, and you point the emulator at the new `bin/smile.bin`.
 
-If the Actions tab says workflows are disabled, go to **Settings → Actions → General** and allow actions.
+## Play in the browser
+
+[jsvecx](https://drsnuggles.github.io/jsvecx/) can open a cartridge from `?rom=` when that value is a public `http` URL. The page fetches it through its own proxy, so the file does not need CORS headers.
+
+These two links are the cartridges from the latest build on `main`. Each green **Build ROMs** run copies `hello.bin` and `smile.bin` to `roms/` after it finishes, and a push that only changes `roms/` does not start another build.
+
+- [Smile](https://drsnuggles.github.io/jsvecx/?rom=https://raw.githubusercontent.com/nxnlvz/zig2vec/main/roms/smile.bin)
+- [Hello](https://drsnuggles.github.io/jsvecx/?rom=https://raw.githubusercontent.com/nxnlvz/zig2vec/main/roms/hello.bin)
+
+The Actions artifact itself cannot go in `?rom=`. That URL needs a GitHub login, and the zip contains both cartridges plus the assembly. jsvecx would not know which `.bin` you meant.
+
+To play one specific run instead of whatever is on `main`:
+
+1. Download `vectrex-roms` as above and unzip it.
+2. Open [jsvecx](https://drsnuggles.github.io/jsvecx/).
+3. Drag `bin/smile.bin` or `bin/hello.bin` onto the page.
+
+The smile cartridge plays itself. There is no BIOS file to add.

@@ -3,8 +3,13 @@ name: Build ROMs
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "roms/**"
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   rom:
@@ -38,3 +43,18 @@ jobs:
             zig-out/bin/*.bin
             zig-out/*.s
           if-no-files-found: error
+
+      - name: Publish ROMs for the browser
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p roms
+          cp zig-out/bin/hello.bin zig-out/bin/smile.bin roms/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add roms/hello.bin roms/smile.bin
+          if git diff --cached --quiet; then
+            echo "ROMs unchanged"
+            exit 0
+          fi
+          git commit -m "Publish the cartridges for jsvecx."
+          git push

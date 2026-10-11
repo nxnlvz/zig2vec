@@ -8,4 +8,4 @@ Host-side Zig emitter for Vectrex ROMs. Do not retarget the Zig compiler. `lwasm
 - A new example is a new folder under `examples/` plus one row in the `examples` array. Do not special-case it in the library.
 - Cartridge RAM used by `smile` starts at `$C880`. The tail ring is 32 Y/X pairs at `$C8A0`. `$C88A` is scratch for `Asm.pull`.
 - BIOS constants live in `bios` inside the library.
-- A local macOS `zig build` opens `smile.bin` in RetroArch vecx via `tools/launch-mac.sh`. CI and Linux do not. `-Dlaunch=false` skips it. `-Drom=hello` chooses the other cartridge. Do not launch from the library.
+- `roms/hello.bin` and `roms/smile.bin` are the public cartridges for jsvecx. CI copies them from `zig-out/bin` after a successful build. Do not edit them by hand.
