@@ -18,13 +18,13 @@ pub const Asm = struct {
     buf: []u8,
     len: usize = 0,
 
-    pub fn append(self: *Asm, text: []const u8) void {
-        @memcpy(self.buf[self.len..][0..text.len], text);
-        self.len += text.len;
+    pub fn append(self: *Asm, bytes: []const u8) void {
+        @memcpy(self.buf[self.len..][0..bytes.len], bytes);
+        self.len += bytes.len;
     }
 
-    pub fn line(self: *Asm, text: []const u8) void {
-        self.append(text);
+    pub fn line(self: *Asm, bytes: []const u8) void {
+        self.append(bytes);
         self.append("\n");
     }
 
@@ -105,5 +105,5 @@ pub fn header(a: *Asm, title: []const u8) void {
 }
 
 pub fn writeStdout(a: *const Asm) !void {
-    try std.posix.write(std.posix.STDOUT_FILENO, a.buf[0..a.len]);
+    _ = try std.posix.write(std.posix.STDOUT_FILENO, a.buf[0..a.len]);
 }
