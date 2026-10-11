@@ -1,14 +1,5 @@
 const std = @import("std");
-
-const Wait_Recal = 0xF192;
-const Intensity_5F = 0xF2A5;
-const Intensity_a = 0xF2AB;
-const Reset0Ref = 0xF354;
-const Moveto_d = 0xF312;
-const Draw_Line_d = 0xF3DF;
-const Draw_VLc = 0xF3CE;
-const Print_Str_d = 0xF37A;
-const music1 = 0xFD0D;
+const zv = @import("zig2vec");
 
 const grav_shift = 10;
 const drag_shift = 8;
@@ -16,78 +7,6 @@ const start_x: i16 = 100 << 8;
 const start_vy: i16 = 2 << 8;
 const tail_samples = 32;
 const tail_buf = 0xC8A0;
-
-const Asm = struct {
-    buf: []u8,
-    len: usize = 0,
-
-    fn append(self: *Asm, text: []const u8) void {
-        @memcpy(self.buf[self.len..][0..text.len], text);
-        self.len += text.len;
-    }
-
-    fn line(self: *Asm, text: []const u8) void {
-        self.append(text);
-        self.append("\n");
-    }
-
-    fn fmt(self: *Asm, comptime spec: []const u8, args: anytype) void {
-        var tmp: [96]u8 = undefined;
-        const s = std.fmt.bufPrint(&tmp, spec, args) catch unreachable;
-        self.line(s);
-    }
-
-    fn label(self: *Asm, name: []const u8) void {
-        self.append(name);
-        self.append(":\n");
-    }
-
-    fn jsr(self: *Asm, addr: u16) void {
-        self.fmt(" jsr ${X:0>4}", .{addr});
-    }
-
-    fn ldx(self: *Asm, name: []const u8) void {
-        self.append(" ldx #");
-        self.append(name);
-        self.append("\n");
-    }
-
-    fn text(self: *Asm, name: []const u8, message: []const u8) void {
-        self.label(name);
-        self.append(" fcc \"");
-        self.append(message);
-        self.line("\"");
-        self.line(" fcb $80");
-    }
-
-    fn pairs(self: *Asm, name: []const u8, bytes: []const i8) void {
-        self.label(name);
-        var i: usize = 0;
-        while (i < bytes.len) : (i += 2) {
-            self.fmt(" fcb {d},{d}", .{ bytes[i], bytes[i + 1] });
-        }
-    }
-
-    fn asrD(self: *Asm, times: usize, loop: []const u8) void {
-        self.fmt(" ldy #{d}", .{times});
-        self.label(loop);
-        self.line(" asra");
-        self.line(" rorb");
-        self.line(" leay -1,y");
-        self.append(" bne ");
-        self.append(loop);
-        self.append("\n");
-    }
-
-    fn pull(self: *Asm, pos: u16, vel: u16, shift: usize, loop: []const u8) void {
-        self.fmt(" ldd ${X:0>4}", .{pos});
-        self.asrD(shift, loop);
-        self.line(" std $C88A");
-        self.fmt(" ldd ${X:0>4}", .{vel});
-        self.line(" subd $C88A");
-        self.fmt(" std ${X:0>4}", .{vel});
-    }
-};
 
 fn sat(v: f32) i8 {
     const r = @round(v);
@@ -108,19 +27,19 @@ fn arc(comptime n: usize, r: f32, a0: f32, a1: f32) [n * 2]i8 {
     return out;
 }
 
-fn drawPart(a: *Asm, dy: i8, dx: i8, count: usize, name: []const u8) void {
-    a.jsr(Reset0Ref);
+fn drawPart(a: *zv.Asm, dy: i8, dx: i8, count: usize, name: []const u8) void {
+    a.jsr(zv.bios.Reset0Ref);
     a.line(" lda $C882");
     a.fmt(" adda #{d}", .{dy});
     a.line(" ldb $C880");
     a.fmt(" addb #{d}", .{dx});
-    a.jsr(Moveto_d);
+    a.jsr(zv.bios.Moveto_d);
     a.fmt(" ldb #{d}", .{count});
     a.ldx(name);
-    a.jsr(Draw_VLc);
+    a.jsr(zv.bios.Draw_VLc);
 }
 
-fn game(a: *Asm) void {
+fn game(a: *zv.Asm) void {
     const pi = std.math.pi;
     const circle = arc(8, 14, -pi / 2.0, -pi / 2.0 + 2.0 * pi);
     const smile = arc(5, 8, 200.0 * pi / 180.0, 340.0 * pi / 180.0);
@@ -130,14 +49,7 @@ fn game(a: *Asm) void {
 
     a.fmt("tailbuf equ ${X:0>4}", .{tail_buf});
     a.fmt("; grav {d}, drag {d}, tail {d} samples", .{ grav_shift, drag_shift, tail_samples });
-    a.line(" org $0000");
-    a.line(" fcc \"g GCE 2026\"");
-    a.line(" fcb $80");
-    a.fmt(" fdb ${X:0>4}", .{music1});
-    a.line(" fcb $F8,$50,$20,$C8");
-    a.line(" fcc \"SMILE\"");
-    a.line(" fcb $80");
-    a.line(" fcb $00");
+    zv.header(a, "SMILE");
 
     a.fmt(" ldd #{d}", .{start_x});
     a.line(" std $C880");
@@ -151,7 +63,7 @@ fn game(a: *Asm) void {
     a.line(" clr $C88F");
 
     a.label("frame");
-    a.jsr(Wait_Recal);
+    a.jsr(zv.bios.Wait_Recal);
     a.line(" lda #6");
     a.line(" sta $C82A");
     a.line(" lda #4");
@@ -189,7 +101,6 @@ fn game(a: *Asm) void {
     a.line(" inc $C888");
 
     a.label("after_phys");
-    // Record the pixel the face is on. Newest sample ends the tail.
     a.line(" lda $C889");
     a.line(" lsla");
     a.line(" ldx #tailbuf");
@@ -216,12 +127,11 @@ fn game(a: *Asm) void {
     a.label("use_bye");
     a.line(" ldu #goodbye");
     a.label("print_msg");
-    a.jsr(Intensity_5F);
+    a.jsr(zv.bios.Intensity_5F);
     a.line(" lda #4");
     a.line(" ldb #-36");
-    a.jsr(Print_Str_d);
+    a.jsr(zv.bios.Print_Str_d);
 
-    // length = clamp(|vx| + |vy|, 0..7) * 4 + 3, then clamp to samples stored.
     a.line(" lda $C884");
     a.line(" bpl vxpos");
     a.line(" nega");
@@ -251,11 +161,11 @@ fn game(a: *Asm) void {
     a.line(" suba $C88E");
     a.line(" anda #$1F");
     a.line(" sta $C88C");
-    a.jsr(Reset0Ref);
+    a.jsr(zv.bios.Reset0Ref);
     a.line(" jsr load_slot");
     a.line(" sta $C894");
     a.line(" stb $C895");
-    a.jsr(Moveto_d);
+    a.jsr(zv.bios.Moveto_d);
     a.line(" lda #$08");
     a.line(" sta $C88D");
     a.line(" lda $C88E");
@@ -277,10 +187,10 @@ fn game(a: *Asm) void {
     a.line(" suba $C895");
     a.line(" sta $C89B");
     a.line(" lda $C88D");
-    a.jsr(Intensity_a);
+    a.jsr(zv.bios.Intensity_a);
     a.line(" lda $C89A");
     a.line(" ldb $C89B");
-    a.jsr(Draw_Line_d);
+    a.jsr(zv.bios.Draw_Line_d);
     a.line(" lda $C897");
     a.line(" sta $C894");
     a.line(" lda $C898");
@@ -296,7 +206,7 @@ fn game(a: *Asm) void {
     a.line(" lbne seg");
 
     a.label("no_tail");
-    a.jsr(Intensity_5F);
+    a.jsr(zv.bios.Intensity_5F);
     drawPart(a, sat(14 * @sin(-pi / 2.0)), 0, 8, "circle");
     drawPart(a, 6, -6, 3, "eye");
     drawPart(a, 6, 6, 3, "eye");
@@ -321,7 +231,7 @@ fn game(a: *Asm) void {
 
 pub fn main() !void {
     var storage: [16384]u8 = undefined;
-    var a = Asm{ .buf = &storage };
+    var a = zv.Asm{ .buf = &storage };
     game(&a);
-    try std.posix.write(std.posix.STDOUT_FILENO, a.buf[0..a.len]);
+    try zv.writeStdout(&a);
 }

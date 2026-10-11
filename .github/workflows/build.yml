@@ -1,0 +1,34 @@
+name: Build ROMs
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  rom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig 0.14.1
+        run: |
+          curl -fsSL -o zig.tar.xz https://ziglang.org/download/0.14.1/zig-x86_64-linux-0.14.1.tar.xz
+          tar -xJf zig.tar.xz
+          echo "$PWD/zig-x86_64-linux-0.14.1" >> "$GITHUB_PATH"
+
+      - name: Install lwasm
+        run: sudo apt-get update && sudo apt-get install -y lwtools
+
+      - name: Build cartridges
+        run: zig build
+
+      - name: Upload ROMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: vectrex-roms
+          path: |
+            zig-out/bin/*.bin
+            zig-out/*.s
+          if-no-files-found: error
