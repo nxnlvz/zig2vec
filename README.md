@@ -154,6 +154,15 @@ zig build
 
 `zig build` only writes the bins. `tools/launch-mac.sh` returns immediately unless it is running on macOS. MAME's `vectrex` driver can load a bin, and it also needs a BIOS dump you own (`vectrex.zip`). RetroArch vecx and jsvecx do not.
 
+On the environment desktop, RetroArch and the vecx core are already installed. From the repository root:
+
+```sh
+tools/launch-desktop.sh
+tools/launch-desktop.sh roms/hello.bin
+```
+
+With no argument it opens `zig-out/bin/smile.bin` when that file exists, and `roms/smile.bin` otherwise. The window uses `DISPLAY` when that is set, and otherwise the X socket under `/tmp/.X11-unix`. Quit RetroArch to return to the shell.
+
 ## Output of `zig build`
 
 | File | What it is |
@@ -178,6 +187,7 @@ src/root.zig                 library: assembly writer, BIOS addresses, cartridge
 examples/hello/              static HELLO WORLD cartridge
 examples/smile/              orbiting smiley with a velocity-scaled tail
 tools/launch-mac.sh          opens one ROM in RetroArch; local macOS builds only
+tools/launch-desktop.sh      opens one ROM in RetroArch on the Linux desktop
 roms/hello.bin               public hello cartridge for jsvecx; CI writes this
 roms/smile.bin               public smile cartridge for jsvecx; CI writes this
 build.zig                    one ROM step per example
